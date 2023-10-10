@@ -232,8 +232,9 @@ begin
         OutputDebugStringA('test'); // logging for debugging
         if success = 0 then
         begin
-                 glGetShaderInfoLog(vertexShader, 512, nil, infoLog); // this line crashes.
-                 OutputDebugStringA(infoLog);// logging for debugging
+                glGetShaderInfoLog(vertexShader, 512, nil, infoLog);
+                // this line crashes.
+                OutputDebugStringA(infoLog); // logging for debugging
         end;
 
         // fragment shader
@@ -254,7 +255,7 @@ begin
 
         if success = 0 then
         begin
-                // glGetProgramInfoLog(shaderProgram, 512, nil, infoLog);
+                //glGetProgramInfoLog(shaderProgram, 512, nil, infoLog);  Crash
                 // print to console..
         end;
 
@@ -263,10 +264,6 @@ begin
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
 
-
-        // glVertexAttribPointer: procedure(index: GLuint;
-        // size: GLint; type_: GLenum; normalized:
-        // GLboolean; stride: GLsizei; const pointer: Pointer); stdcall;
         // Linking Vertex Attributes
 
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(real),
@@ -290,29 +287,21 @@ begin
 
         // ..:: Drawing code (in render loop) :: ..
         // 4. draw the object
-        glUseProgram(shaderProgram);
-        glBindVertexArray(VAO);
+        while not glfwWindowShouldClose(window) do // dont have glfw
+        begin
+                glClearColor(0.2, 0.3, 0.3, 1.0);
+                glClear(GL_COLOR_BUFFER_BIT);
 
-//        while not glfwWindowShouldClose(window) // dont have glfw do
-//        begin glClearColor(0.2, 0.3, 0.3, 1.0);
-//                glClear(GL_COLOR_BUFFER_BIT);
-//
-//        glUseProgram(shaderProgram);
-//        glBindVertexArray(VAO);
-//        // glDrawArrays(GL_TRIANGLES, 0, 500);
-//        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-//
-//        // glfwSwapBuffers(window);
-//        // glfwPollEvents();
-//end;
+                glUseProgram(shaderProgram);
+                glBindVertexArray(VAO);
+                glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices));
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+                glfwSwapBuffers(window);
+                glfwPollEvents();
+        end;
 
 end;
-
-
-// DSA is direct state access - its the bind-less opengl
-// it effectively removes bind to modify
-// all you need is to put your vertices into a buffer and call glDrawElements once a frame
-// (with an appropriate shader program bound)
 
 procedure TForm1.SetupLightSource;
 begin
