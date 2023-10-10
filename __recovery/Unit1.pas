@@ -284,6 +284,8 @@ begin
 
   // ..:: Drawing code (in render loop) :: ..
   // 4. draw the object
+  // todo: Translate this c++ code to Delphi compatible gl code to draw something
+  // on the screen.
   while not glfwWindowShouldClose(window) do // dont have glfw
   begin
     glClearColor(0.2, 0.3, 0.3, 1.0);
