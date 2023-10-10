@@ -15,6 +15,13 @@ Type
                 Z: Single;
         end;
 
+        TVector4f = record
+                R: Single;
+                G: Single;
+                B: Single;
+                A: Single;
+        end;
+
 const
         VertexShaderCode: string = '#version 330 core' + sLineBreak +
           'layout (location = 0) in vec3 aPos;' + sLineBreak + 'void main()' +
@@ -22,10 +29,15 @@ const
           '    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);' +
           sLineBreak + '}';
 
+        fragmentShaderSource: string = '#version 330 core\n' +
+          'out vec4 FragColor;\n' + 'void main()\n' + '{\n' +
+          '   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n' + '}\n\0';
+
 var
         cameraPos: TVector3f = (X: 0.0; Y: 0.0; Z: 3.0);
         cameraFront: TVector3f = (X: 0.0; Y: 0.0; Z: - 1.0);
         cameraUp: TVector3f = (X: 0.0; Y: 1.0; Z: 0.0);
+        FragColor: TVector4f = (R: 1.0; G: 0.5; B: 0.2; A: 1.0);
         Ax, Mx: Single;
         Ay, My: Single;
 
@@ -50,8 +62,7 @@ type
                 procedure Render;
                 procedure ResetModelView;
 
-
-                var
+        var
                 fDC: HDC;
 
         public
@@ -69,18 +80,18 @@ implementation
 
 procedure TForm1.FormCreate(Sender: TObject);
 var
-  RC: HGLRC;
+        RC: HGLRC;
 begin
-  fDC := GetDC(Handle); // Actually, you can use any windowed control here
-  setupPixelFormat(fDC);
-  RC := wglCreateContext(fDC); // makes OpenGL window out of DC
-  wglMakeCurrent(fDC, RC); // makes OpenGL window active
+        fDC := GetDC(Handle); // Actually, you can use any windowed control here
+        setupPixelFormat(fDC);
+        RC := wglCreateContext(fDC); // makes OpenGL window out of DC
+        wglMakeCurrent(fDC, RC); // makes OpenGL window active
 
-  InitOpenGLext;
-  GLInit;
-  load3DObjModel;
+        InitOpenGLext;
+        GLInit;
+        load3DObjModel;
 
-  Application.OnIdle := ApplicationEvents1Idle;
+        Application.OnIdle := ApplicationEvents1Idle;
 end;
 
 procedure TForm1.ApplicationEvents1Idle(Sender: TObject; var Done: Boolean);
@@ -197,34 +208,104 @@ procedure TForm1.RenderModel(const vertices: TVertices; const faces: TFaces);
 var
         VBO: GLuint;
         vertexShader: GLuint;
-        success: GLint;
-        infoLog: array [0 .. 511] of GLchar;
-        infoLogStr: string;
+        success: integer;
+        infoLog: PAnsiChar;
+        outputString: string;
+        fragmentShader: integer;
+        shaderProgram: integer;
+        VAO: integer;
 begin
         // //https://learnopengl.com/Getting-started/Hello-Triangle
 
-
         glGenBuffers(1, @VBO);
 
-         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
+          GL_STATIC_DRAW);
 
-         vertexShader := glCreateShader(GL_VERTEX_SHADER);
+        vertexShader := glCreateShader(GL_VERTEX_SHADER);
 
-         glShaderSource(vertexShader, 1, @VertexShaderCode, nil);
-         glCompileShader(vertexShader);
+        glShaderSource(vertexShader, 1, @VertexShaderCode, nil);
+        glCompileShader(vertexShader);
 
-         glGetShaderiv(vertexShader, GL_COMPILE_STATUS, @success);
+        glGetShaderiv(vertexShader, GL_COMPILE_STATUS, @success);
+        OutputDebugStringA('test'); // logging for debugging
+        if success = 0 then
+        begin
+                 glGetShaderInfoLog(vertexShader, 512, nil, infoLog); // this line crashes.
+                 OutputDebugStringA(infoLog);// logging for debugging
+        end;
 
-         // latest working version
-         // code under this throws exception.
+        // fragment shader
 
-//         // Check if compilation was successful
-//         if success = 0 then
-//         begin
-//         glGetShaderInfoLog(vertexShader, 512, nil, @infoLogStr);
-//         ShowMessage(infoLogStr);
-//         end;
+        fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragmentShader, 1, @fragmentShaderSource, nil);
+        glCompileShader(fragmentShader);
+
+        // shader program
+
+        shaderProgram := glCreateProgram();
+
+        glAttachShader(shaderProgram, vertexShader);
+        glAttachShader(shaderProgram, fragmentShader);
+        glLinkProgram(shaderProgram);
+
+        glGetProgramiv(shaderProgram, GL_LINK_STATUS, @success);
+
+        if success = 0 then
+        begin
+                // glGetProgramInfoLog(shaderProgram, 512, nil, infoLog);
+                // print to console..
+        end;
+
+        glUseProgram(shaderProgram);
+
+        glDeleteShader(vertexShader);
+        glDeleteShader(fragmentShader);
+
+
+        // glVertexAttribPointer: procedure(index: GLuint;
+        // size: GLint; type_: GLenum; normalized:
+        // GLboolean; stride: GLsizei; const pointer: Pointer); stdcall;
+        // Linking Vertex Attributes
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(real),
+          Pointer(0));
+
+        glEnableVertexAttribArray(0);
+
+        glGenVertexArrays(1, @VAO);
+
+        // ..:: Initialization code (done once (unless your object frequently changes)) :: ..
+        // 1. bind Vertex Array Object
+        glBindVertexArray(VAO);
+        // 2. copy our vertices array in a buffer for OpenGL to use
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
+          GL_STATIC_DRAW);
+        // 3. then set our vertex attributes pointers
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(real),
+          Pointer(0));
+        glEnableVertexAttribArray(0);
+
+        // ..:: Drawing code (in render loop) :: ..
+        // 4. draw the object
+        glUseProgram(shaderProgram);
+        glBindVertexArray(VAO);
+
+//        while not glfwWindowShouldClose(window) // dont have glfw do
+//        begin glClearColor(0.2, 0.3, 0.3, 1.0);
+//                glClear(GL_COLOR_BUFFER_BIT);
+//
+//        glUseProgram(shaderProgram);
+//        glBindVertexArray(VAO);
+//        // glDrawArrays(GL_TRIANGLES, 0, 500);
+//        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+//
+//        // glfwSwapBuffers(window);
+//        // glfwPollEvents();
+//end;
+
 end;
 
 
