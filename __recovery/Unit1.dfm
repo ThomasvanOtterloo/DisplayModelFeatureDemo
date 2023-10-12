@@ -15,9 +15,19 @@ object Form1: TForm1
   OnKeyPress = FormKeyPress
   OnPaint = FormPaint
   TextHeight = 15
-  object Timer1: TTimer
-    Interval = 1
-    Left = 104
-    Top = 96
+  object StaticText1: TStaticText
+    Left = 448
+    Top = 120
+    Width = 61
+    Height = 19
+    Caption = 'StaticText1'
+    TabOrder = 0
+  end
+  object GLAsyncTimer1: TGLAsyncTimer
+    Enabled = True
+    Interval = 100
+    OnTimer = GLAsyncTimer1Timer
+    Left = 368
+    Top = 280
   end
 end

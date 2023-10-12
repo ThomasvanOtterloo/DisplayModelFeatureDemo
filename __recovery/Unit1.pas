@@ -6,7 +6,7 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, System.Math,
   Winapi.OpenGL, Winapi.OpenGLext, Vcl.ExtCtrls, obj, Camera,
-  _meshify_simplify_quadric;
+  _meshify_simplify_quadric, Vcl.StdCtrls, GLS.AsyncTimer;
 
 Type
   TVector3f = record
@@ -23,14 +23,15 @@ Type
   end;
 
 const
-  VertexShaderCode: string = '#version 330 core' + sLineBreak +
-    'layout (location = 0) in vec3 aPos;' + sLineBreak + 'void main()' +
-    sLineBreak + '{' + sLineBreak +
-    '    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);' + sLineBreak + '}';
+  VertexShaderCode: array [0 .. 0] of PGLchar = ('#version 330 core ' +
+    sLineBreak + 'layout (location = 0) in vec3 aPos;' + sLineBreak +
+    'void main()' + sLineBreak + '{' + sLineBreak +
+    '    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);' + sLineBreak + '}');
 
-  fragmentShaderSource: string = '#version 330 core\n' + 'out vec4 FragColor;\n'
-    + 'void main()\n' + '{\n' + '   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n'
-    + '}\n\0';
+  FragmentShaderCode: array [0 .. 0] of PGLchar = ('#version 330 core ' +
+    sLineBreak + 'out vec4 FragColor;' + sLineBreak + 'void main()' + sLineBreak
+    + '{' + sLineBreak + '   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);' +
+    sLineBreak + '}');
 
 var
   cameraPos: TVector3f = (X: 0.0; Y: 0.0; Z: 3.0);
@@ -39,14 +40,28 @@ var
   FragColor: TVector4f = (R: 1.0; G: 0.5; B: 0.2; A: 1.0);
   Ax, Mx: Single;
   Ay, My: Single;
+  shaderProgram: integer;
+
+  verticesTr: array [0 .. 8] of Single = (
+    -0.5,
+    -0.5,
+    0.0,
+    0.5,
+    -0.5,
+    0.0,
+    0.0,
+    0.5,
+    0.0
+  );
 
 type
   TForm1 = class(TForm)
-
-    Timer1: TTimer;
+    GLAsyncTimer1: TGLAsyncTimer;
+    StaticText1: TStaticText;
     procedure FormCreate(Sender: TObject);
     procedure FormPaint(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
+    procedure GLAsyncTimer1Timer(Sender: TObject);
 
   private
     procedure setupPixelFormat(DC: HDC);
@@ -78,6 +93,7 @@ implementation
 procedure TForm1.FormCreate(Sender: TObject);
 var
   RC: HGLRC;
+  major, minor: GLint;
 begin
   fDC := GetDC(Handle); // Actually, you can use any windowed control here
   setupPixelFormat(fDC);
@@ -86,6 +102,10 @@ begin
 
   InitOpenGLext;
   GLInit;
+
+  glGetIntegerv(GL_MAJOR_VERSION, @major);
+  glGetIntegerv(GL_MINOR_VERSION, @minor);
+
   load3DObjModel;
 
   Application.OnIdle := ApplicationEvents1Idle;
@@ -121,6 +141,22 @@ begin
   if Key = #27 then
     Close;
 
+end;
+
+procedure TForm1.GLAsyncTimer1Timer(Sender: TObject);
+begin
+   StaticText1.Caption := 'test';
+
+   while not Application.Terminated do
+  begin
+    Application.ProcessMessages;
+    glClearColor(0.2, 0.3, 0.3, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(shaderProgram);
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, Length(verticesTr));
+  end;
 end;
 
 procedure TForm1.GLInit;
@@ -175,8 +211,6 @@ var
   FileName: string;
   faces: TFaces;
   vertices: TVertices;
-  i: integer;
-  Count, k: integer;
 begin
   // Specify the path to your OBJ file
   // "C:\Users\t.vanotterloo\Pictures\GewoonKunst.obj" \
@@ -205,58 +239,51 @@ var
   VBO: GLuint;
   vertexShader: GLuint;
   success: integer;
-  infoLog: PAnsiChar;
-  outputString: string;
+  successFr: integer;
+  infoLog: array [0 .. 4079] of GLchar;
+  logString: AnsiString; // Change to string or UnicodeString if needed
+  shaderStatus: PGLchar;
   fragmentShader: integer;
-  shaderProgram: integer;
+
   VAO: integer;
 begin
   // //https://learnopengl.com/Getting-started/Hello-Triangle
 
   glGenBuffers(1, @VBO);
-
   glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
+  glBufferData(GL_ARRAY_BUFFER, sizeof(@verticesTr), @verticesTr,
+    GL_STATIC_DRAW);
   vertexShader := glCreateShader(GL_VERTEX_SHADER);
 
   glShaderSource(vertexShader, 1, @VertexShaderCode, nil);
   glCompileShader(vertexShader);
 
   glGetShaderiv(vertexShader, GL_COMPILE_STATUS, @success);
-
-
-  // todo: Create a error catch once something goes wrong on generating the shaders
-  // logging the information to the output console/event window.
   if success = 0 then
   begin
-    glGetShaderInfoLog(vertexShader, 512, nil, infoLog);
-    // this line crashes.
-    OutputDebugStringA(infoLog); // logging for debugging
+    glGetShaderInfoLog(vertexShader, 8080, nil, @infoLog);
+    logString := PAnsiChar(@infoLog); // Convert to a Delphi string
+
   end;
 
   // fragment shader
-
   fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragmentShader, 1, @fragmentShaderSource, nil);
+  glShaderSource(fragmentShader, 1, @FragmentShaderCode, nil);
   glCompileShader(fragmentShader);
 
   // shader program
-
   shaderProgram := glCreateProgram();
-
   glAttachShader(shaderProgram, vertexShader);
   glAttachShader(shaderProgram, fragmentShader);
   glLinkProgram(shaderProgram);
-
-  glGetProgramiv(shaderProgram, GL_LINK_STATUS, @success);
+  glGetProgramiv(shaderProgram, GL_LINK_STATUS, @successFr);
 
   // todo: Create a error catch once something goes wrong on generating the program
   // logging the information to the output console/event window.
-  if success = 0 then
+  if successFr = 0 then
   begin
-    // glGetProgramInfoLog(shaderProgram, 512, nil, infoLog);  Crash
-    // print to console..
+    glGetProgramInfoLog(shaderProgram, 512, nil, @infoLog);
+    logString := PAnsiChar(@infoLog); // Convert to a Delphi string
   end;
 
   glUseProgram(shaderProgram);
@@ -277,30 +304,18 @@ begin
   glBindVertexArray(VAO);
   // 2. copy our vertices array in a buffer for OpenGL to use
   glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(@verticesTr), @verticesTr,
+    GL_STATIC_DRAW);
   // 3. then set our vertex attributes pointers
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(real), Pointer(0));
   glEnableVertexAttribArray(0);
 
-  // ..:: Drawing code (in render loop) :: ..
-  // 4. draw the object
-  // todo: Translate this c++ code to Delphi compatible gl code to draw something
-  // on the screen.
-  while not glfwWindowShouldClose(window) do // dont have glfw
-  begin
-    glClearColor(0.2, 0.3, 0.3, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glUseProgram(shaderProgram);
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, sizeof(vertices));
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-  end;
+  // renderloop started
+  GLAsyncTimer1.Enabled := TRUE;
 
 end;
+
+
 
 procedure TForm1.SetupLightSource;
 begin
